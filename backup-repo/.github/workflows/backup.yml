@@ -3,7 +3,7 @@
 # nunca no repositório público do site, porque o backup contém os dados dos pedidos.
 #
 # Segredos necessários (Settings > Secrets and variables > Actions):
-#   SUPABASE_URL         a Project URL do Supabase
+#   (a Project URL já está abaixo, em env.URL)
 #   SUPABASE_SECRET_KEY  a chave "secret" (Project Settings > API Keys). Nunca coloque esta chave no site.
 
 name: backup semanal
@@ -24,7 +24,7 @@ jobs:
 
       - name: exportar tabelas
         env:
-          URL: ${{ secrets.SUPABASE_URL }}
+          URL: https://zdonoqqtctpjidwlcqcp.supabase.co
           KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           set -euo pipefail
@@ -33,6 +33,9 @@ jobs:
           for t in pedidos projetos config; do
             curl -sSf "$URL/rest/v1/$t?select=*" -H "apikey: $KEY" -o "$d/$t.json"
           done
+          # arquivo no formato do botão "restaurar de um arquivo" da gestão
+          jq -n --slurpfile pe "$d/pedidos.json" --slurpfile pr "$d/projetos.json" --slurpfile c "$d/config.json" \
+            '{app:"controle-de-projetos", versao:1, exportado_em:(now|todate), pedidos:$pe[0], projetos:$pr[0], config:$c[0]}' > "$d/restaurar.json"
           # mantém só os 26 backups mais recentes (cerca de 6 meses)
           ls -1d backups/*/ | sort | head -n -26 | xargs -r rm -rf
 
