@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de Projetos · Diálogo</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1a3d70">
+<link rel="icon" href="assets/logo.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..800&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div id="login" hidden></div>
+<div class="app" id="app" hidden>
+  <aside class="rail" id="rail" aria-label="navegação"></aside>
+  <div style="min-width:0">
+    <main class="main" id="main"><div class="main-in" id="view"><div class="place">carregando…</div></div></main>
+  </div>
+</div>
+<div id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/comum.js"></script>
+<script src="assets/ia.js"></script>
+<script src="assets/gestao.js"></script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# Backup semanal do Controle de Projetos.
+# Este arquivo vai num repositório PRIVADO separado (ex.: controle-projetos-backup),
+# nunca no repositório público do site, porque o backup contém os dados dos pedidos.
+#
+# Segredos necessários (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL         a Project URL do Supabase
+#   SUPABASE_SECRET_KEY  a chave "secret" (Project Settings > API Keys). Nunca coloque esta chave no site.
+
+name: backup semanal
+
+on:
+  schedule:
+    - cron: "0 10 * * 1"   # toda segunda-feira, 7h no horário de Brasília
+  workflow_dispatch:       # permite rodar na mão pela aba Actions
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: exportar tabelas
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          d="backups/$(date -u +%Y-%m-%d)"
+          mkdir -p "$d"
+          for t in pedidos projetos config; do
+            curl -sSf "$URL/rest/v1/$t?select=*" -H "apikey: $KEY" -o "$d/$t.json"
+          done
+          # mantém só os 26 backups mais recentes (cerca de 6 meses)
+          ls -1d backups/*/ | sort | head -n -26 | xargs -r rm -rf
+
+      - name: salvar no repositório
+        run: |
+          git config user.name "backup-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A backups
+          git commit -m "backup $(date -u +%Y-%m-%d)" || echo "nada mudou"
+          git push
