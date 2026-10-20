@@ -1,5 +1,6 @@
 /* IA da gestão. Duas formas de uso:
-   - sem chave: copia o prompt e abre o Claude para você colar (custo zero);
+   - sem chave: copia um prompt pronto com os dados da plataforma e abre o Claude (sua assinatura, custo zero);
+     depois você cola a resposta de volta na plataforma;
    - com chave da API da Anthropic (fica só neste navegador): responde dentro do app. */
 const IA = (() => {
   const SDK = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0/+esm";
@@ -19,14 +20,19 @@ const IA = (() => {
     return client;
   }
 
-  // sem chave devolve null depois de copiar o prompt; com chave devolve o texto da resposta
+  // copia o prompt e abre o Claude; prompts curtos já chegam preenchidos na conversa
+  async function abrirNoClaude(prompt){
+    const ok = await copiar(prompt);
+    const q = encodeURIComponent(prompt);
+    window.open(q.length < 6000 ? `https://claude.ai/new?q=${q}` : "https://claude.ai/new", "_blank", "noopener");
+    toast(ok ? "prompt copiado e Claude aberto. se a conversa abrir vazia, cole com Ctrl+V. depois traga a resposta para cá."
+             : "não foi possível copiar o prompt. use o botão copiar prompt na caixa que apareceu.");
+    return ok;
+  }
+
+  // com chave devolve o texto da resposta; sem chave abre o Claude e devolve null
   async function rodar(prompt, { onText, signal } = {}){
-    if (!integrada()){
-      const ok = await copiar(prompt);
-      window.open("https://claude.ai/new", "_blank", "noopener");
-      toast(ok ? "prompt copiado. cole no Claude que abriu em outra aba." : "não foi possível copiar o prompt.");
-      return null;
-    }
+    if (!integrada()){ await abrirNoClaude(prompt); return null; }
     const c = await cliente();
     try{
       const stream = c.beta.messages.stream({
@@ -46,19 +52,30 @@ const IA = (() => {
       throw e;
     }
   }
+
+  // aceita JSON puro, dentro de bloco ```json ou no meio de um texto
+  function lerJson(t){
+    const s = String(t||"");
+    const bloco = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const base = bloco ? bloco[1] : s;
+    const i=base.indexOf("{"), j=base.lastIndexOf("}");
+    if (i<0 || j<i) throw { code:"bad" };
+    try{ return JSON.parse(base.slice(i, j+1)); }catch{ throw { code:"bad" }; }
+  }
   async function json(prompt, opts){
     const t = await rodar(prompt, opts);
-    if (t===null) return null;
-    const i=t.indexOf("{"), j=t.lastIndexOf("}");
-    try{ return JSON.parse(t.slice(i, j+1)); }catch{ throw { code:"bad" }; }
+    return t===null ? null : lerJson(t);
   }
+  // texto colado do chat: tira marcações simples de markdown
+  const limpar = t => String(t||"").replace(/\r/g,"").replace(/^#{1,6}\s+/gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/^\s*[-*]\s+/gm,"- ").trim();
+
   const erro = e => {
-    if (e?.code==="bad") return "a ia não respondeu no formato esperado. tente de novo.";
+    if (e?.code==="bad") return "não encontrei a resposta no formato esperado. copie a resposta inteira do Claude e cole de novo.";
     if (e?.code==="refusal") return "a ia não pôde responder este pedido.";
-    if (e?.status===401) return "a chave da API não é válida. confira em configurar ia.";
+    if (e?.status===401) return "a chave da API não é válida. confira em ajustes.";
     if (e?.status===429) return "limite de uso da API atingido. tente em instantes.";
     if (e?.status===402 || /credit/i.test(e?.message||"")) return "sem créditos na conta da API da Anthropic.";
     return "a ia não respondeu. tente de novo.";
   };
-  return { chave, integrada, rodar, json, erro, MODELO };
+  return { chave, integrada, rodar, json, lerJson, limpar, abrirNoClaude, erro, MODELO };
 })();

@@ -71,7 +71,7 @@
     view: mem.get("cp-view","painel"), selPed:null, selProj: mem.get("cp-proj","")||null, projTab:"geral", selTopic:null,
     grupo:"triar", fTipo:"", fSetor:"", busca:"", projModo: mem.get("cp-pmodo","quadro"), projBusca:"",
     tipo:"novo projeto", formPlat:"", recusando:null, pesosOpen:false, docKind:"link",
-    ai:{}, aiProj:{}, aiTop:{}, sum:null
+    ai:{}, aiProj:{}, aiTop:{}, sum:null, topColar:null
   };
   if (!VIEWS.includes(st.view)) st.view="painel";
 
@@ -201,7 +201,7 @@
   const fmtSize = n => !n ? "" : n<1024 ? n+" b" : n<1048576 ? Math.round(n/1024)+" kb" : (n/1048576).toFixed(1).replace(".",",")+" mb";
   const urlOk = v => { v=String(v||"").trim(); if (!v) return null; try{ const u=new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(v)?v:"https://"+v); return /^https?:$/.test(u.protocol)?u.href:null; }catch{ return null; } };
   const sortedP = () => [...st.projetos].sort((a,b)=>tms(b.atualizado_em||b.criado_em)-tms(a.atualizado_em||a.criado_em));
-  const iaLbl = t => IA.integrada() ? t : `${t} (copiar para o Claude)`;
+  const iaLbl = t => IA.integrada() ? t : `${t} no Claude`;
 
   /* ---------- trilho ---------- */
   function renderRail(){
@@ -261,7 +261,7 @@
         </section>
         <div class="dash-r">
           <section class="card"><div class="card-h"><h2>pedidos</h2>${todos.length?`<button class="btn ai sm" data-act="sum" ${st.sum?.busy?"disabled":""}>${I.spark} ${iaLbl("resumo da semana")}</button>`:""}</div>
-            ${st.sum?`<div class="aibox" style="margin-bottom:16px"><div class="h"><span>resumo da semana</span><button class="btn sm" data-act="sum-x">${st.sum.busy?"parar":"fechar"}</button></div><div class="out ${st.sum.busy&&!st.sum.text?"thinking":""}" id="sum-out">${esc(st.sum.text||"pensando")}</div></div>`:""}
+            ${st.sum?.colar?`<div style="margin-bottom:16px">${colarBox("sum","","resposta do Claude: resumo da semana",DICA)}</div>`:st.sum?`<div class="aibox" style="margin-bottom:16px"><div class="h"><span>resumo da semana</span><button class="btn sm" data-act="sum-x">${st.sum.busy?"parar":"fechar"}</button></div><div class="out ${st.sum.busy&&!st.sum.text?"thinking":""}" id="sum-out">${esc(st.sum.text||"pensando")}</div></div>`:""}
             ${charts(todos)}
           </section>
           <section class="card"><div class="card-h"><h2>definição dos projetos</h2></div>${kpis(ps)}</section>
@@ -370,9 +370,9 @@
           <label class="chk full"><input type="checkbox" id="d-dir" ${g.diretoria?"checked":""}> pedido da diretoria</label>
         </div>
         <div class="decide"><button class="btn ai sm" data-act="ai-sug" data-id="${esc(p.id)}" ${a.sug?.busy?"disabled":""}>${I.spark} ${iaLbl("sugerir esforço e impacto")}</button><button class="btn ai sm" data-act="ai-dup" data-id="${esc(p.id)}" ${a.dup?.busy?"disabled":""}>${I.spark} ${iaLbl("procurar pedidos parecidos")}</button></div>
-        ${a.sug ? `<div class="aibox"><div class="h"><span>sugestão da ia</span><button class="btn sm" data-act="ai-x" data-k="sug" data-id="${esc(p.id)}">fechar</button></div>
+        ${a.sug?.colar ? colarBox("sug", p.id, "resposta do Claude: esforço e impacto", DICA) : a.sug ? `<div class="aibox"><div class="h"><span>sugestão da ia</span><button class="btn sm" data-act="ai-x" data-k="sug" data-id="${esc(p.id)}">fechar</button></div>
           ${a.sug.busy?`<div class="out thinking">pensando</div>`: a.sug.err?`<div class="out">${esc(a.sug.err)}</div>`:`<div class="out">esforço ${a.sug.esforco} (${esc(ESF[a.sug.esforco])}) e impacto ${a.sug.impacto} (${esc(IMP[a.sug.impacto])}).\n${esc(a.sug.motivo)}</div><div><button class="btn sm primary" data-act="ai-sug-ok" data-id="${esc(p.id)}">aplicar</button></div>`}</div>` : ""}
-        ${a.dup ? `<div class="aibox"><div class="h"><span>pedidos parecidos</span><button class="btn sm" data-act="ai-x" data-k="dup" data-id="${esc(p.id)}">fechar</button></div>
+        ${a.dup?.colar ? colarBox("dup", p.id, "resposta do Claude: pedidos parecidos", DICA) : a.dup ? `<div class="aibox"><div class="h"><span>pedidos parecidos</span><button class="btn sm" data-act="ai-x" data-k="dup" data-id="${esc(p.id)}">fechar</button></div>
           ${a.dup.busy?`<div class="out thinking">comparando</div>`: a.dup.err?`<div class="out">${esc(a.dup.err)}</div>`: a.dup.items.length ? `<div class="sugg">${a.dup.items.map(x=>`<button class="pick" data-act="sel-ped" data-id="${esc(x.id)}"><span>${esc(x.titulo)}</span><small>${esc(x.status)}. ${esc(x.motivo)}</small></button>`).join("")}</div>` : `<div class="out">nenhum pedido parecido encontrado.</div>`}</div>` : ""}
       </section>
 
@@ -451,8 +451,8 @@
     const list=p.checklist||[], ai=st.aiProj[p.id]||{}, at=etapaAtual(p), prox=at&&faltam(p,at)[0];
     return `<div class="ov">
       <section class="card"><div class="card-h"><h2>checklist</h2><span class="hint">${ck(p).done} de ${list.length}</span></div>
-        <div class="addrow" style="margin-bottom:10px"><input id="new-item" data-draft placeholder="nova pendência e enter" maxlength="200" aria-label="nova pendência"><button class="btn sm" data-act="ck-add">adicionar</button><button class="btn ai sm" data-act="ai-check" ${ai.busy?"disabled":""}>${I.spark} ${IA.integrada()?"sugerir":"sugerir (copiar)"}</button></div>
-        ${ai.kind==="check"?`<div class="aibox" style="margin-bottom:10px"><div class="h"><span>sugestões da ia</span><span style="display:flex;gap:6px"><button class="btn sm" data-act="ai-add-all" ${ai.items?.length?"":"disabled"}>adicionar todas</button><button class="btn sm" data-act="aip-x">fechar</button></span></div>
+        <div class="addrow" style="margin-bottom:10px"><input id="new-item" data-draft placeholder="nova pendência e enter" maxlength="200" aria-label="nova pendência"><button class="btn sm" data-act="ck-add">adicionar</button><button class="btn ai sm" data-act="ai-check" ${ai.busy?"disabled":""}>${I.spark} ${iaLbl("sugerir")}</button></div>
+        ${ai.kind==="check"&&ai.colar?`<div style="margin-bottom:10px">${colarBox("check", p.id, "resposta do Claude: sugestões para o checklist", DICA)}</div>`:ai.kind==="check"?`<div class="aibox" style="margin-bottom:10px"><div class="h"><span>sugestões da ia</span><span style="display:flex;gap:6px"><button class="btn sm" data-act="ai-add-all" ${ai.items?.length?"":"disabled"}>adicionar todas</button><button class="btn sm" data-act="aip-x">fechar</button></span></div>
           ${ai.busy?`<div class="out thinking">pensando</div>`:ai.error?`<div class="out">${esc(ai.error)}</div>`:`<div class="sugg">${(ai.items||[]).map((t,k)=>`<div class="pick" style="flex-direction:row;justify-content:space-between;align-items:center;cursor:default"><span>${esc(t)}</span><button class="btn sm" data-act="ai-add" data-k="${k}">adicionar</button></div>`).join("")}</div>`}</div>`:""}
         ${list.length?`<ul class="check">${list.map(i=>`<li class="${i.feito?"done":""}"><input type="checkbox" data-ck="${esc(i.id)}" ${i.feito?"checked":""} aria-label="concluir"><input class="txt" id="ck-${esc(i.id)}" data-keep data-cktxt="${esc(i.id)}" value="${esc(i.texto)}" aria-label="pendência"><button class="btn ghost sm" data-act="ck-del" data-id="${esc(i.id)}" aria-label="remover pendência">✕</button></li>`).join("")}</ul>`:`<div class="empty">nada listado ainda. escreva acima ou peça sugestões à ia.</div>`}
       </section>
@@ -461,9 +461,11 @@
           ${prox?`<div class="next"><span class="k">${esc(at.t)} · faltam ${faltam(p,at).length} de ${at.topicos.length} tópicos</span><b>${esc(prox.t)}</b><span class="hint">${esc(prox.itens.join("; "))}.</span><div><button class="btn primary sm" data-act="topic" data-k="${prox.k}">definir agora</button></div></div>`
                 :`<div class="next"><b>as 4 etapas estão concluídas.</b><span class="hint">o projeto está definido e pronto para execução.</span></div>`}
         </section>
-        <section class="card"><div class="card-h"><h2>lacunas do projeto</h2><button class="btn ai sm" data-act="ai-analyze" ${ai.busy?"disabled":""}>${I.spark} ${iaLbl("apontar o que falta")}</button></div>
-          <p class="hint">a ia lê os ${NT} tópicos, o checklist e as observações e aponta o que ainda não foi respondido, os riscos e os próximos passos.</p>
-          ${ai.kind==="analyze"?`<div class="aibox" style="margin-top:12px"><div class="h"><span>análise da ia</span><button class="btn sm" data-act="aip-x">${ai.busy?"parar":"fechar"}</button></div><div class="out ${ai.busy&&!ai.text?"thinking":""}" id="an-out">${esc(ai.text||"pensando")}</div></div>`:""}
+        <section class="card"><div class="card-h"><h2>lacunas do projeto</h2></div>
+          <p class="hint">a ia lê os ${NT} tópicos, o checklist, as observações e os pedidos vinculados e aponta o que ainda não foi respondido, os riscos e os próximos passos.</p>
+          <div class="decide" style="margin-top:10px"><button class="btn ai sm" data-act="ai-analyze" ${ai.busy?"disabled":""}>${I.spark} ${iaLbl("apontar o que falta")}</button><button class="btn sm" data-act="ai-conversa" title="abre o Claude com todo o projeto, para você perguntar o que quiser">conversar sobre o projeto no Claude</button></div>
+          ${ai.kind==="analyze"&&ai.colar?`<div style="margin-top:12px">${colarBox("analyze", p.id, "resposta do Claude: lacunas do projeto", DICA)}</div>`
+            :ai.kind==="analyze"?`<div class="aibox" style="margin-top:12px"><div class="h"><span>análise da ia</span><span style="display:flex;gap:6px;flex-wrap:wrap">${!ai.busy&&ai.text?`<button class="btn sm" data-act="an-salvar">salvar nas observações</button>`:""}<button class="btn sm" data-act="aip-x">${ai.busy?"parar":"fechar"}</button></span></div><div class="out ${ai.busy&&!ai.text?"thinking":""}" id="an-out">${esc(ai.text||"pensando")}</div></div>`:""}
         </section>
         <section class="card"><div class="card-h"><h2>observações</h2></div>
           <textarea id="f-notas" data-keep aria-label="observações" placeholder="decisões, riscos, contatos">${esc(p.notas)}</textarea>
@@ -487,6 +489,7 @@
         <div class="seg" role="group" aria-label="status do tópico">${TST.map(s=>`<button data-act="tst" data-k="${t.k}" data-s="${s}" aria-pressed="${s===cur}">${s}</button>`).join("")}</div></div>
       <div class="roteiro" aria-label="roteiro">${t.itens.map(x=>`<span>${esc(x)}</span>`).join("")}</div>
       <textarea id="tx-${t.k}" data-keep data-tx="${t.k}" maxlength="4000" placeholder="responda aqui o que o roteiro pede">${esc(v.txt||"")}</textarea>
+      ${st.topColar?.pid===p.id&&st.topColar.k===t.k ? colarBox("top", p.id, `resposta do Claude: rascunho de “${esc(t.t)}”`, DICA+" o texto entra no fim do tópico.") : ""}
       ${rel.length?`<div class="vt"><span>ver também:</span>${rel.map(r=>`<button class="rel" data-act="topic" data-k="${r}" title="${esc(trecho(p,r,200))}"><i class="tdot ${spCls(stT(p,r))}" aria-hidden="true"></i>${esc(TOP[r].t)}</button>`).join("")}</div>`:""}
       <div class="ed-f">
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ai sm" data-act="ai-top" data-k="${t.k}" ${busy?"disabled":""}>${I.spark} ${busy?"rascunhando…":iaLbl("rascunhar com ia")}</button><button class="btn sm" data-act="topic-x">fechar</button></div>
@@ -545,7 +548,7 @@
       <header class="vh"><div><p class="eyebrow">configurações</p><h1>ajustes</h1></div></header>
       <div class="egrid">
         <section class="card form"><div class="card-h"><h2>inteligência artificial</h2>${pill(k?"integrada":"copiar para o Claude", k?"var(--ok)":"var(--ink2)")}</div>
-          <p class="hint">sem chave, os botões de ia copiam um prompt pronto e abrem o Claude para você colar. custo zero.</p>
+          <p class="hint">sem chave, os botões de ia abrem o Claude com um prompt pronto, montado com tudo o que está registrado na plataforma. quando o Claude responder, você cola a resposta na caixa que aparece aqui e ela vira sugestões, rascunhos ou análises na própria tela. usa a sua assinatura do Claude, sem custo extra.</p>
           <p class="hint">com uma chave da API da Anthropic, a resposta aparece dentro da plataforma (modelo ${esc(IA.MODELO)}, cobrado por uso na sua conta da API). a chave fica salva só neste navegador.</p>
           <label class="f">chave da API<input type="password" id="ia-key" placeholder="sk-ant-…" value="${esc(k)}" autocomplete="off"></label>
           <div class="set-row"><button class="btn primary sm" data-act="ia-salvar">salvar chave</button>${k?`<button class="btn ghost sm" data-act="ia-remover">remover chave</button>`:""}</div>
@@ -726,6 +729,13 @@
       case "ck-del": { const p=P(); if (p){ await updP(p,{checklist:(p.checklist||[]).filter(i=>i.id!==id)}); render(); } break; }
       case "ai-check": { const p=P(); if (p) aiChecklist(p); break; }
       case "ai-analyze": { const p=P(); if (p) aiAnalyze(p); break; }
+      case "ai-conversa": { const p=P(); if (p) aiConversa(p); break; }
+      case "colar": { const kind=b.dataset.kind, txt=$("#cola-"+kind)?.value||""; if (!txt.trim()){ toast("cole a resposta do Claude na caixa primeiro."); $("#cola-"+kind)?.focus(); break; }
+        try{ await usarColado(kind, id, txt); }catch(err){ toast(IA.erro(err)); } break; }
+      case "colar-x": colando.set(b.dataset.kind, id, b.dataset.kind==="sug"||b.dataset.kind==="dup" ? undefined : null); if (b.dataset.kind==="check"||b.dataset.kind==="analyze") delete st.aiProj[id]; render(); break;
+      case "re-copiar": { const s=colando.get(b.dataset.kind, id); if (s?.prompt) toast(await copiar(s.prompt) ? "prompt copiado. cole na conversa do Claude." : "não foi possível copiar."); break; }
+      case "an-salvar": { const p=P(), s=p&&st.aiProj[p.id]; if (!s?.text) break; const cab=`análise da ia em ${new Date().toLocaleDateString("pt-BR")}:`;
+        await updP(p,{notas:[(p.notas||"").trim(), `${cab}\n${s.text}`].filter(Boolean).join("\n\n")}); delete st.aiProj[p.id]; render(); toast("análise salva nas observações"); break; }
       case "aip-x": { const p=P(); if (p){ st.aiProj[p.id]?.ctl?.abort(); delete st.aiProj[p.id]; render(); } break; }
       case "ai-add-all": { const p=P(), s=p&&st.aiProj[p.id]; if (s?.items?.length){ await updP(p,{checklist:[...(p.checklist||[]),...s.items.map(t=>({id:uid(),texto:t,feito:false}))]}); delete st.aiProj[p.id]; toast("pendências adicionadas"); render(); } break; }
       case "ai-add": { const p=P(), s=p&&st.aiProj[p.id]; if (!s) break; const k=+b.dataset.k, t=s.items[k]; s.items=s.items.filter((_,j)=>j!==k); if (!s.items.length) delete st.aiProj[p.id]; await updP(p,{checklist:[...(p.checklist||[]),{id:uid(),texto:t,feito:false}]}); render(); break; }
@@ -784,36 +794,106 @@
   });
 
   /* ---------- ia ---------- */
-  const pedTxt = p => `protocolo: ${p.codigo}\ntipo: ${p.tipo}\nsetor: ${p.setor}, solicitante: ${p.nome}\nplataforma: ${p.plataforma||"(não informada)"}\ntítulo: ${p.titulo}\ndescrição: ${p.descricao||"(sem descrição)"}\nprecisa até: ${p.precisaAte||"(sem data)"}`;
-  const projText = p => `título: ${p.titulo||"(sem título)"}\nstatus: ${pst(p)}\nresponsável: ${p.responsavel||"(não definido)"}\nprazo: ${p.prazo||"(sem prazo)"}\nobjetivo: ${p.objetivo||"(não escrito)"}\nobservações: ${p.notas||"(nenhuma)"}\nchecklist:\n${(p.checklist||[]).map(i=>`- [${i.feito?"x":" "}] ${i.texto}`).join("\n")||"(vazio)"}`;
+  // Sem chave da API: o prompt vai pronto para o Claude e a resposta volta colada numa caixa da plataforma.
+  // Com chave: a resposta chega direto. Nos dois casos o resultado aparece no mesmo lugar.
+  const EMPRESA = "Contexto: a Diálogo Engenharia é uma construtora brasileira. A equipe de tecnologia desenvolve plataformas internas para os setores (planejamento, custos, suprimentos, engenharia/obra, comercial, financeiro, RH, jurídico e diretoria). Cada projeto é definido em 4 etapas com 16 tópicos, e cada tópico tem um roteiro do que precisa ser respondido.";
+  const pedTxt = p => `protocolo: ${p.codigo}\ntipo: ${p.tipo}\nsetor: ${p.setor}, solicitante: ${p.nome}\nplataforma: ${p.plataforma||"(não informada)"}\ntítulo: ${p.titulo}\ndescrição: ${p.descricao||"(sem descrição)"}\nprecisa até: ${p.precisaAte?dataIso(p.precisaAte):"(sem data)"}\nstatus: ${p.status}`;
   const defsTxt = (p, n=1500) => ETAPAS.map(e=>`${e.t}\n`+e.topicos.map(t=>`- ${t.t} [${stT(p,t.k)}]\n  roteiro: ${t.itens.join("; ")}\n  resposta: ${(p.etapas?.[t.k]?.txt||"").trim().slice(0,n)||"(vazio)"}`).join("\n")).join("\n\n");
+  function contextoProjeto(p, n=1500){
+    const c=ck(p), z=prazoP(p), peds=pedidosDoProjeto(p.id);
+    const anexos=[...(p.docs||[]).map(d=>d.nome), ...(p.links||[]).map(l=>l.titulo||l.url)];
+    return `PROJETO: ${p.titulo||"(sem título)"}
+status: ${pst(p)} · andamento ${andamento(p)}% (${prontos(p)} de ${NT} tópicos prontos)
+responsável: ${p.responsavel||"(não definido)"}
+prazo: ${p.prazo?`${dataIso(p.prazo)}${z.t?` (${z.t})`:""}`:"(sem prazo)"}
+objetivo: ${p.objetivo||"(não escrito)"}
+link da plataforma: ${p.plataforma_url||"(nenhum)"}${p.origem?`\norigem: pedido ${p.origem.codigo||""} de ${p.origem.nome} (${p.origem.setor})`:""}
+
+CHECKLIST (${c.done} de ${c.total} concluídas):
+${(p.checklist||[]).map(i=>`- [${i.feito?"x":" "}] ${i.texto}`).join("\n")||"(vazio)"}
+
+DEFINIÇÕES POR ETAPA:
+${defsTxt(p,n)}
+
+OBSERVAÇÕES:
+${(p.notas||"").trim()||"(nenhuma)"}
+
+PEDIDOS E FEEDBACKS VINCULADOS (${peds.length}):
+${peds.slice(0,20).map(x=>`- ${x.codigo} [${x.status}] ${x.titulo} (${x.setor}, ${x.nome}): ${(x.descricao||"").slice(0,300)}`).join("\n")||"(nenhum)"}
+
+DOCUMENTOS E LINKS: ${anexos.join("; ")||"(nenhum)"}`;
+  }
+
+  // caixa para colar a resposta que o Claude deu na outra aba
+  const colarBox = (kind, id, titulo, dica) => `<div class="aibox">
+      <div class="h"><span>${titulo}</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-act="re-copiar" data-kind="${kind}" data-id="${esc(id)}">copiar prompt</button><button class="btn sm" data-act="colar-x" data-kind="${kind}" data-id="${esc(id)}">fechar</button></span></div>
+      <p class="hint">${dica}</p>
+      <textarea id="cola-${kind}" data-draft rows="4" placeholder="cole aqui a resposta do Claude"></textarea>
+      <div><button class="btn sm primary" data-act="colar" data-kind="${kind}" data-id="${esc(id)}">usar resposta</button></div></div>`;
+  const DICA = "o Claude abriu em outra aba com o prompt pronto. quando ele responder, copie a resposta inteira e cole aqui.";
+
+  // onde cada tipo guarda seu estado de "aguardando resposta colada"
+  const colando = {
+    get(kind, id){ return kind==="sug"||kind==="dup" ? st.ai[id]?.[kind] : kind==="sum" ? st.sum : kind==="top" ? st.topColar : st.aiProj[id]; },
+    set(kind, id, v){
+      if (kind==="sug"||kind==="dup"){ (st.ai[id] ||= {})[kind]=v; }
+      else if (kind==="sum") st.sum=v;
+      else if (kind==="top") st.topColar=v;
+      else st.aiProj[id]=v;
+    }
+  };
+  async function pedirAoClaude(kind, id, prompt, extra={}){
+    await IA.abrirNoClaude(prompt);
+    colando.set(kind, id, {colar:true, prompt, kind: kind==="check"||kind==="analyze" ? kind : undefined, ...extra});
+    render();
+    setTimeout(()=>$("#cola-"+kind)?.scrollIntoView({block:"nearest", behavior:"smooth"}), 40);
+  }
+
+  // transforma a resposta (da API ou colada) no resultado de cada tipo
+  const resSug = r => { const e=Math.round(+r.esforco), i=Math.round(+r.impacto); if (!(e>=1&&e<=5&&i>=1&&i<=5)) throw {code:"bad"}; return {esforco:e, impacto:i, motivo:String(r.motivo||"").slice(0,400)}; };
+  const resDup = (r, pid) => { const map=Object.fromEntries(allPedidos().filter(x=>x.id!==pid).map(x=>[x.id,x])); const byCod=Object.fromEntries(Object.values(map).map(x=>[x.codigo,x]));
+    return {items:(Array.isArray(r?.parecidos)?r.parecidos:[]).map(x=>({...x, ped: map[x.id] || byCod[x.id] || byCod[x.codigo]})).filter(x=>x.ped).slice(0,5).map(x=>({id:x.ped.id, titulo:x.ped.titulo, status:x.ped.status, motivo:String(x.motivo||"").slice(0,200)}))}; };
+  function resCheck(txt){
+    let itens=[];
+    try{ const r=IA.lerJson(txt); itens=Array.isArray(r?.itens)?r.itens:[]; }
+    catch{ // sem JSON: aceita uma lista com marcadores ou números
+      const marca=/^\s*(?:[-*•]|\d+[.)])\s+/;
+      itens=String(txt).split("\n").filter(l=>marca.test(l)).map(l=>l.replace(marca,"").replace(/\*\*/g,"").trim());
+    }
+    itens=itens.filter(x=>typeof x==="string"&&x.trim()).map(x=>x.trim().slice(0,200)).slice(0,10);
+    if (!itens.length) throw {code:"bad"};
+    return itens;
+  }
+  async function usarColado(kind, id, txt){
+    if (kind==="sug"){ colando.set(kind, id, resSug(IA.lerJson(txt))); }
+    else if (kind==="dup"){ colando.set(kind, id, resDup(IA.lerJson(txt), id)); }
+    else if (kind==="check"){ st.aiProj[id]={kind:"check", items:resCheck(txt)}; }
+    else if (kind==="analyze"){ st.aiProj[id]={kind:"analyze", text:IA.limpar(txt)}; }
+    else if (kind==="sum"){ st.sum={text:IA.limpar(txt)}; }
+    else if (kind==="top"){
+      const tc=st.topColar, p=curP(tc?.pid); if (!p) return;
+      const antigo=(p.etapas?.[tc.k]?.txt||"").trim(), novo=(antigo?antigo+"\n\n":"")+IA.limpar(txt);
+      await updTopic(p.id, tc.k, {txt:novo.slice(0,4000), st: stT(p,tc.k)==="pendente"?"em andamento":stT(p,tc.k)});
+      st.topColar=null; toast("rascunho do Claude adicionado ao tópico. revise antes de marcar pronto.");
+    }
+    render();
+  }
 
   async function aiSugerir(p){
+    const prompt=`${EMPRESA}\n\nVocê ajuda a priorizar os pedidos que os setores fazem à equipe de tecnologia. Avalie o pedido abaixo.\n\nEsforço de desenvolvimento, de 1 a 5: 1 = horas, 2 = poucos dias, 3 = algumas semanas, 4 = cerca de um mês, 5 = vários meses.\nImpacto, de 1 a 5: 1 = uma pessoa, 2 = parte de um setor, 3 = um setor inteiro, 4 = vários setores, 5 = a construtora toda.\n\n${pedTxt(p)}\n\nResponda somente com este JSON, sem texto antes ou depois: {"esforco": número, "impacto": número, "motivo": "duas frases curtas em português do Brasil"}`;
+    if (!IA.integrada()) return pedirAoClaude("sug", p.id, prompt);
     const a=(st.ai[p.id] ||= {}); a.sug={busy:true}; render();
-    try{
-      const r = await IA.json(`Você ajuda a priorizar pedidos que setores de uma construtora fazem a quem desenvolve as plataformas internas da empresa. Avalie o pedido abaixo.\n\nEsforço de desenvolvimento, de 1 a 5: 1 = horas, 2 = poucos dias, 3 = algumas semanas, 4 = cerca de um mês, 5 = vários meses.\nImpacto, de 1 a 5: 1 = uma pessoa, 2 = parte de um setor, 3 = um setor inteiro, 4 = vários setores, 5 = a construtora toda.\n\n${pedTxt(p)}\n\nResponda somente com JSON: {"esforco": número, "impacto": número, "motivo": "duas frases curtas em português do Brasil, sem markdown"}`);
-      if (r===null){ delete a.sug; }
-      else {
-        const e=Math.round(+r.esforco), i=Math.round(+r.impacto);
-        if (!(e>=1&&e<=5&&i>=1&&i<=5)) throw {code:"bad"};
-        a.sug={esforco:e, impacto:i, motivo:String(r.motivo||"").slice(0,400)};
-      }
-    }catch(e){ a.sug={err:IA.erro(e)}; }
+    try{ a.sug=resSug(await IA.json(prompt)); }catch(e){ a.sug={err:IA.erro(e)}; }
     schedule();
   }
   async function aiParecidos(p){
     const outros = allPedidos().filter(x=>x.id!==p.id).sort((x,y)=>y.criadoEm-x.criadoEm).slice(0,80);
     const a=(st.ai[p.id] ||= {});
     if (!outros.length){ a.dup={items:[]}; render(); return; }
+    const prompt=`${EMPRESA}\n\nCompare o pedido-alvo com a lista de outros pedidos e indique apenas os que pedem praticamente a mesma coisa ou claramente se sobrepõem (no máximo 5). Não force correspondências.\n\nPEDIDO-ALVO:\n${pedTxt(p)}\n\nOUTROS PEDIDOS:\n${outros.map(x=>`- ${x.codigo} | ${x.status} | ${x.titulo}: ${(x.descricao||"").slice(0,220)}`).join("\n")}\n\nResponda somente com este JSON, sem texto antes ou depois: {"parecidos":[{"codigo":"protocolo exato da lista, ex. DLG-0007","motivo":"frase curta em português do Brasil"}]}. Se não houver nenhum, {"parecidos":[]}.`;
+    if (!IA.integrada()) return pedirAoClaude("dup", p.id, prompt);
     a.dup={busy:true}; render();
-    try{
-      const r = await IA.json(`Compare o pedido-alvo com a lista de outros pedidos e indique apenas os que pedem praticamente a mesma coisa ou claramente se sobrepõem (no máximo 5). Não force correspondências.\n\npedido-alvo:\n${pedTxt(p)}\n\noutros pedidos:\n${outros.map(x=>`- id ${x.id} | ${x.codigo} | ${x.status} | ${x.titulo}: ${(x.descricao||"").slice(0,220)}`).join("\n")}\n\nResponda somente com JSON: {"parecidos":[{"id":"id exato da lista","motivo":"frase curta em português do Brasil"}]}. Se não houver nenhum, {"parecidos":[]}.`);
-      if (r===null) delete a.dup;
-      else {
-        const map=Object.fromEntries(outros.map(x=>[x.id,x]));
-        a.dup={items:(Array.isArray(r?.parecidos)?r.parecidos:[]).filter(x=>map[x.id]).slice(0,5).map(x=>({id:x.id, titulo:map[x.id].titulo, status:map[x.id].status, motivo:String(x.motivo||"").slice(0,200)}))};
-      }
-    }catch(e){ a.dup={err:IA.erro(e)}; }
+    try{ a.dup=resDup(await IA.json(prompt), p.id); }catch(e){ a.dup={err:IA.erro(e)}; }
     schedule();
   }
   async function aiResumo(){
@@ -821,22 +901,23 @@
     const lin = p => `- [${p.codigo} | ${p.tipo} | ${p.setor} | ${p.status} | nota ${score(p).n}${p.g.diretoria?" | diretoria":""}] ${p.titulo}`;
     const novos=todos.filter(p=>now-p.criadoEm<7*DAY), triar=todos.filter(p=>p.status==="recebido"), parados=todos.filter(p=>["em análise","aprovado"].includes(p.status)&&now-p.statusEm>10*DAY);
     const top=todos.filter(p=>["em análise","aprovado","em desenvolvimento"].includes(p.status)).sort((a,b)=>score(b).n-score(a).n).slice(0,6);
-    const atras=st.projetos.filter(p=>prazoP(p).late).map(p=>`- ${p.titulo} (${prazoP(p).t})`);
-    const prompt=`Você é o assistente de quem gerencia a fila de pedidos de plataformas internas de uma construtora. Escreva em português do Brasil, em texto simples sem markdown, curto e direto:\n1) o que chegou nos últimos 7 dias e se há temas ou setores que se repetem;\n2) o que triar primeiro e por quê;\n3) o que pode estar parado ou atrasado;\n4) uma recomendação de foco para a semana.\n\nchegaram nos últimos 7 dias (${novos.length}):\n${novos.slice(0,40).map(lin).join("\n")||"(nenhum)"}\n\npara triar (${triar.length}):\n${triar.slice(0,40).map(p=>lin(p)+` (${idade(p.criadoEm)})`).join("\n")||"(nenhum)"}\n\nmaiores notas na fila:\n${top.map(lin).join("\n")||"(vazia)"}\n\nsem movimento há mais de 10 dias (${parados.length}):\n${parados.slice(0,20).map(lin).join("\n")||"(nenhum)"}\n\nprojetos atrasados (${atras.length}):\n${atras.slice(0,20).join("\n")||"(nenhum)"}`;
-    const ctl=new AbortController(); st.sum={busy:true, text:"", ctl}; if (IA.integrada()) render();
+    const projs=st.projetos.map(p=>`- ${p.titulo} [${pst(p)}] andamento ${andamento(p)}%${p.prazo?`, prazo ${dataIso(p.prazo)}${prazoP(p).t?` (${prazoP(p).t})`:""}`:", sem prazo"}`);
+    const prompt=`${EMPRESA}\n\nVocê é o assistente de quem gerencia a fila de pedidos e os projetos. Hoje é ${new Date().toLocaleDateString("pt-BR")}. Escreva em português do Brasil, em texto simples, curto e direto:\n1) o que chegou nos últimos 7 dias e se há temas ou setores que se repetem;\n2) o que triar primeiro e por quê;\n3) o que pode estar parado ou atrasado, inclusive projetos;\n4) uma recomendação de foco para a semana.\n\nCHEGARAM NOS ÚLTIMOS 7 DIAS (${novos.length}):\n${novos.slice(0,40).map(lin).join("\n")||"(nenhum)"}\n\nPARA TRIAR (${triar.length}):\n${triar.slice(0,40).map(p=>lin(p)+` (${idade(p.criadoEm)})`).join("\n")||"(nenhum)"}\n\nMAIORES NOTAS NA FILA:\n${top.map(lin).join("\n")||"(vazia)"}\n\nSEM MOVIMENTO HÁ MAIS DE 10 DIAS (${parados.length}):\n${parados.slice(0,20).map(lin).join("\n")||"(nenhum)"}\n\nPROJETOS (${projs.length}):\n${projs.slice(0,30).join("\n")||"(nenhum)"}`;
+    if (!IA.integrada()) return pedirAoClaude("sum", "", prompt);
+    const ctl=new AbortController(); st.sum={busy:true, text:"", ctl}; render();
     try{
       const r = await IA.rodar(prompt, {signal:ctl.signal, onText:text=>{ if (st.sum?.ctl===ctl){ st.sum.text=text; const o=$("#sum-out"); if (o){ o.textContent=text; o.classList.remove("thinking"); } } }});
-      if (st.sum?.ctl===ctl) st.sum = r===null ? null : {text:r};
+      if (st.sum?.ctl===ctl) st.sum={text:r};
     }catch(e){ if (ctl.signal.aborted) return; if (st.sum?.ctl===ctl) st.sum={text:IA.erro(e)}; }
     schedule();
   }
   async function aiTopico(pid,k){
     const p=curP(pid); if (!p) return; const e=etapaDe(k), t=TOP[k], key=pid+":"+k;
-    const tx=$("#tx-"+k), atual = tx ? tx.value : (p.etapas?.[k]?.txt||"");
-    const outros = TOPICOS.filter(x=>x.k!==k && p.etapas?.[x.k]?.txt?.trim()).map(x=>`${x.t}:\n${p.etapas[x.k].txt.trim().slice(0,500)}`).join("\n\n").slice(0,3500);
-    const prompt=`Você ajuda a estruturar projetos de plataformas internas de uma construtora. Escreva um rascunho curto do tópico “${t.t}” (etapa “${e.t}”) para o projeto abaixo. Cubra, em uma ou duas linhas cada, todos os itens do roteiro: ${t.itens.join("; ")}. Onde faltar informação, escreva “a definir:” e diga o que precisa ser decidido ou perguntado. Português do Brasil, texto simples sem markdown, cada linha começando pelo nome do item.\n\n${projText(p)}${atual.trim()?`\n\nO que já está escrito neste tópico:\n${atual.trim()}`:""}${outros?`\n\nO que já foi escrito em outros tópicos:\n${outros}`:""}`;
-    if (!IA.integrada()){ await IA.rodar(prompt); return; }
+    const tx=$("#tx-"+k);
     if (tx && tx.value!==(p.etapas?.[k]?.txt||"")) await updTopic(pid,k,{txt:tx.value});
+    const atual=(p.etapas?.[k]?.txt||"").trim();
+    const prompt=`${EMPRESA}\n\nEscreva um rascunho do tópico “${t.t}” (etapa “${e.t}”) do projeto abaixo. Cubra, em uma ou duas linhas cada, todos os itens do roteiro: ${t.itens.join("; ")}. Use o que já foi escrito nos outros tópicos para manter coerência. Onde faltar informação, escreva “a definir:” e diga o que precisa ser decidido ou perguntado, e a quem. ${atual?"Não repita o que já está escrito neste tópico; complete o que falta. ":""}Português do Brasil, texto simples sem markdown, cada linha começando pelo nome do item. Responda só com o rascunho.\n\n${atual?`O QUE JÁ ESTÁ ESCRITO NESTE TÓPICO:\n${atual}\n\n`:""}${contextoProjeto(p, 700)}`;
+    if (!IA.integrada()) return pedirAoClaude("top", pid, prompt, {pid, k});
     st.aiTop[key]=true; render();
     try{
       const r = await IA.rodar(prompt);
@@ -847,25 +928,26 @@
   }
   async function aiChecklist(p){
     if (!p.objetivo?.trim() && !p.titulo?.trim()){ toast("escreva o objetivo primeiro."); return; }
-    const prompt=`Você ajuda a planejar projetos. Com base no projeto abaixo, sugira de 5 a 8 pendências NOVAS (que não repitam as já listadas), curtas, concretas e acionáveis, em português do Brasil, na ordem em que devem ser feitas.\n\n${projText(p)}\n\nResponda somente com JSON no formato {"itens":["...","..."]}.`;
-    if (!IA.integrada()){ await IA.rodar(prompt); return; }
+    const prompt=`${EMPRESA}\n\nCom base em tudo o que já foi definido no projeto abaixo, sugira de 5 a 8 pendências NOVAS para o checklist: curtas, concretas e acionáveis, na ordem em que devem ser feitas. Não repita pendências que já estão no checklist. Priorize o que destrava a etapa atual e os tópicos ainda vazios. Português do Brasil.\n\n${contextoProjeto(p, 700)}\n\nResponda somente com este JSON, sem texto antes ou depois: {"itens":["...","..."]}`;
+    if (!IA.integrada()) return pedirAoClaude("check", p.id, prompt);
     st.aiProj[p.id]={kind:"check",busy:true}; render();
-    try{
-      const r=await IA.json(prompt);
-      const items=(Array.isArray(r?.itens)?r.itens:[]).filter(x=>typeof x==="string"&&x.trim()).map(x=>x.trim().slice(0,200)).slice(0,10);
-      st.aiProj[p.id]={kind:"check",items,error:items.length?null:"a ia não trouxe sugestões. detalhe mais o objetivo e tente de novo."};
-    }catch(e){ st.aiProj[p.id]={kind:"check",items:[],error:IA.erro(e)}; }
+    try{ st.aiProj[p.id]={kind:"check", items:resCheck(await IA.rodar(prompt))}; }
+    catch(e){ st.aiProj[p.id]={kind:"check",items:[],error:IA.erro(e)}; }
     schedule();
   }
   async function aiAnalyze(p){
-    const prompt=`Você é um gerente de projetos experiente revisando a definição de uma plataforma interna de uma construtora. O projeto segue 4 etapas com ${NT} tópicos; cada tópico tem um roteiro de itens que precisam ser respondidos. Leia tudo e escreva, em português do Brasil, em texto simples sem markdown (sem asteriscos ou #):\n\n1) Situação em duas frases.\n2) O que falta: para cada tópico que não está pronto ou cuja resposta não cobre o roteiro, diga quais itens do roteiro ainda não foram respondidos ou estão vagos. Agrupe por etapa e seja específico.\n3) Inconsistências entre tópicos, se houver (por exemplo, escopo que não bate com o cronograma).\n4) Riscos principais (até 3).\n5) Próximos 3 passos, em ordem.\n\n${projText(p)}\n\ndefinições por etapa:\n${defsTxt(p)}`;
-    if (!IA.integrada()){ await IA.rodar(prompt); return; }
+    const prompt=`${EMPRESA}\n\nVocê é um gerente de projetos experiente revisando a definição do projeto abaixo. Leia tudo e escreva, em português do Brasil, em texto simples (sem asteriscos ou #):\n\n1) Situação em duas frases.\n2) O que falta: para cada tópico que não está pronto ou cuja resposta não cobre o roteiro, diga quais itens do roteiro ainda não foram respondidos ou estão vagos. Agrupe por etapa e seja específico.\n3) Inconsistências entre tópicos, checklist, prazo e pedidos vinculados, se houver.\n4) Riscos principais (até 3).\n5) Próximos 3 passos, em ordem.\n\n${contextoProjeto(p)}`;
+    if (!IA.integrada()) return pedirAoClaude("analyze", p.id, prompt);
     const ctl=new AbortController(); st.aiProj[p.id]={kind:"analyze",busy:true,text:"",ctl}; render();
     try{
       const r=await IA.rodar(prompt, {signal:ctl.signal, onText:text=>{ const s=st.aiProj[p.id]; if (s?.ctl===ctl){ s.text=text; const o=$("#an-out"); if (o){ o.textContent=text; o.classList.remove("thinking"); } } }});
       if (st.aiProj[p.id]?.ctl===ctl) st.aiProj[p.id]={kind:"analyze",text:r};
     }catch(e){ if (ctl.signal.aborted) return; st.aiProj[p.id]={kind:"analyze",text:IA.erro(e)}; }
     schedule();
+  }
+  // conversa livre: leva o projeto inteiro para o Claude
+  function aiConversa(p){
+    IA.abrirNoClaude(`${EMPRESA}\n\nAbaixo está tudo o que já foi registrado sobre este projeto na plataforma. Use como base para responder às minhas perguntas sobre ele. Para começar, confirme em uma frase que leu e diga qual é a principal lacuna que você vê.\n\n${contextoProjeto(p)}`);
   }
 
   /* ---------- login e início ---------- */
