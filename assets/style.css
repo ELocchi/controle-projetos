@@ -444,3 +444,5 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent2);cursor:p
 .topband{display:flex;align-items:center;gap:18px;background:var(--rail);color:#fff;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .topband img{height:32px;width:auto}
 .topband span{font-weight:600;padding-left:18px;border-left:1px solid rgba(255,255,255,.3)}
+
+.login-card a{color:var(--accent2);font-weight:600}
